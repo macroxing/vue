@@ -107,21 +107,18 @@ module.exports = {
       if (!tokens) { // static component
         var Ctor = this.Ctor = options.components[id]
         _.assertAsset(Ctor, 'component', id)
-        // If there's no parent scope directives and no
-        // content to be transcluded, we can optimize the
-        // rendering by pre-transcluding + compiling here
-        // and provide a link function to every instance.
-        if (!this.el.hasChildNodes() &&
-            !this.el.hasAttributes()) {
-          // merge an empty object with owner vm as parent
-          // so child vms can access parent assets.
-          var merged = mergeOptions(Ctor.options, {}, {
-            $parent: this.vm
-          })
-          merged.template = this.inlineTempalte || merged.template
-          this.template = transclude(this.template, merged)
-          this._linkFn = compile(this.template, merged, false, true)
-        }
+        var merged = mergeOptions(Ctor.options, {}, {
+          $parent: this.vm
+        })
+        merged.template = this.inlineTempalte || merged.template
+        merged._asComponent = true
+        merged._parent = this.vm
+        this.template = transclude(this.template, merged)
+        // Important: mark the template as a root node so that
+        // custom element components don't get compiled twice.
+        // fixes #822
+        this.template.__vue__ = true
+        this._linkFn = compile(this.template, merged)
       } else {
         // to be resolved later
         var ctorExp = textParser.tokensToExp(tokens)
@@ -246,9 +243,7 @@ module.exports = {
           vm.$before(ref)
         }
       } else {
-        // make sure to insert before the comment node if
-        // the vms are block instances
-        var nextEl = targetNext._blockStart || targetNext.$el
+        var nextEl = targetNext.$el
         if (vm._reused) {
           // this is the vm we are actually in front of
           currentNext = findNextVm(vm, ref)
@@ -277,26 +272,29 @@ module.exports = {
    */
 
   build: function (data, index, needCache) {
-    var original = data
     var meta = { $index: index }
     if (this.converted) {
-      meta.$key = original.$key
+      meta.$key = data.$key
     }
     var raw = this.converted ? data.$value : data
     var alias = this.arg
-    var hasAlias = !isObject(raw) || !isPlainObject(data) || alias
-    // wrap the raw data with alias
-    data = hasAlias ? {} : raw
     if (alias) {
+      data = {}
       data[alias] = raw
-    } else if (hasAlias) {
+    } else if (!isPlainObject(raw)) {
+      // non-object values
+      data = {}
       meta.$value = raw
+    } else {
+      // default
+      data = raw
     }
     // resolve constructor
     var Ctor = this.Ctor || this.resolveCtor(data, meta)
     var vm = this.vm.$addChild({
       el: templateParser.clone(this.template),
       _asComponent: this.asComponent,
+      _host: this._host,
       _linkFn: this._linkFn,
       _meta: meta,
       data: data,

@@ -1,5 +1,7 @@
 var _ = require('../util')
+var config = require('../config')
 var templateParser = require('../parsers/template')
+var transcludedFlagAttr = '__vue__transcluded'
 
 /**
  * Process an element or a DocumentFragment based on a
@@ -14,6 +16,29 @@ var templateParser = require('../parsers/template')
  */
 
 module.exports = function transclude (el, options) {
+  if (options && options._asComponent) {
+    // mutating the options object here assuming the same
+    // object will be used for compile right after this
+    options._transcludedAttrs = extractAttrs(el.attributes)
+    // Mark content nodes and attrs so that the compiler
+    // knows they should be compiled in parent scope.
+    var i = el.childNodes.length
+    while (i--) {
+      var node = el.childNodes[i]
+      if (node.nodeType === 1) {
+        node.setAttribute(transcludedFlagAttr, '')
+      } else if (node.nodeType === 3 && node.data.trim()) {
+        // wrap transcluded textNodes in spans, because
+        // raw textNodes can't be persisted through clones
+        // by attaching attributes.
+        var wrapper = document.createElement('span')
+        wrapper.textContent = node.data
+        wrapper.setAttribute('__vue__wrap', '')
+        wrapper.setAttribute(transcludedFlagAttr, '')
+        el.replaceChild(wrapper, node)
+      }
+    }
+  }
   // for template tags, what we want is its content as
   // a documentFragment (for block instances)
   if (el.tagName === 'TEMPLATE') {
@@ -47,8 +72,20 @@ function transcludeTemplate (el, options) {
     var rawContent = options._content || _.extractContent(el)
     if (options.replace) {
       if (frag.childNodes.length > 1) {
+        // this is a block instance which has no root node.
+        // however, the container in the parent template
+        // (which is replaced here) may contain v-with and
+        // paramAttributes that still need to be compiled
+        // for the child. we store all the container
+        // attributes on the options object and pass it down
+        // to the compiler.
+        var containerAttrs = options._containerAttrs = {}
+        var i = el.attributes.length
+        while (i--) {
+          var attr = el.attributes[i]
+          containerAttrs[attr.name] = attr.value
+        }
         transcludeContent(frag, rawContent)
-        _.copyAttributes(el, frag.firstChild)
         return frag
       } else {
         var replacer = frag.firstChild
@@ -153,4 +190,25 @@ function insertContentAt (outlet, contents) {
     parent.insertBefore(contents[i], outlet)
   }
   parent.removeChild(outlet)
+}
+
+/**
+ * Helper to extract a component container's attribute names
+ * into a map, and filtering out `v-with` in the process.
+ * The resulting map will be used in compiler/compile to
+ * determine whether an attribute is transcluded.
+ *
+ * @param {NameNodeMap} attrs
+ */
+
+function extractAttrs (attrs) {
+  if (!attrs) return null
+  var res = {}
+  var vwith = config.prefix + 'with'
+  var i = attrs.length
+  while (i--) {
+    var name = attrs[i].name
+    if (name !== vwith) res[name] = true
+  }
+  return res
 }
