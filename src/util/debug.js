@@ -1,17 +1,12 @@
-var config = require('../config')
-
 /**
- * Enable debug utilities. The enableDebug() function and
- * all _.log() & _.warn() calls will be dropped in the
- * minified production build.
+ * Enable debug utilities.
  */
 
-enableDebug()
+if (process.env.NODE_ENV !== 'production') {
 
-function enableDebug () {
-
+  var config = require('../config')
   var hasConsole = typeof console !== 'undefined'
-  
+
   /**
    * Log a message.
    *
@@ -30,13 +25,12 @@ function enableDebug () {
    * @param {String} msg
    */
 
-  exports.warn = function (msg) {
+  exports.warn = function (msg, e) {
     if (hasConsole && (!config.silent || config.debug)) {
       console.warn('[Vue warn]: ' + msg)
       /* istanbul ignore if */
       if (config.debug) {
-        /* jshint debug: true */
-        debugger
+        console.warn((e || new Error('Warning Stack Trace')).stack)
       }
     }
   }
@@ -46,6 +40,23 @@ function enableDebug () {
    */
 
   exports.assertAsset = function (val, type, id) {
+    /* istanbul ignore if */
+    if (type === 'directive') {
+      if (id === 'with') {
+        exports.warn(
+          'v-with has been deprecated in ^0.12.0. ' +
+          'Use props instead.'
+        )
+        return
+      }
+      if (id === 'events') {
+        exports.warn(
+          'v-events has been deprecated in ^0.12.0. ' +
+          'Pass down methods as callback props instead.'
+        )
+        return
+      }
+    }
     if (!val) {
       exports.warn('Failed to resolve ' + type + ': ' + id)
     }

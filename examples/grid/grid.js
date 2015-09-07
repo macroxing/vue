@@ -2,22 +2,19 @@
 Vue.component('demo-grid', {
   template: '#grid-template',
   replace: true,
-  paramAttributes: ['data', 'columns', 'filter-key'],
+  props: ['data', 'columns', 'filter-key'],
   data: function () {
+    var reversed = {}
+    this.columns.forEach(function (key) {
+      reversed[key] = false
+    })
     return {
       data: null,
       columns: null,
       sortKey: '',
       filterKey: '',
-      reversed: {}
+      reversed: reversed
     }
-  },
-  compiled: function () {
-    // initialize reverse state
-    var self = this
-    this.columns.forEach(function (key) {
-      self.reversed.$add(key, false)
-    })
   },
   methods: {
     sortBy: function (key) {

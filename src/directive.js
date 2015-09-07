@@ -31,16 +31,16 @@ function Directive (name, el, vm, descriptor, def, host) {
   this.raw = descriptor.raw
   this.expression = descriptor.expression
   this.arg = descriptor.arg
-  this.filters = _.resolveFilters(vm, descriptor.filters)
+  this.filters = descriptor.filters
   // private
+  this._descriptor = descriptor
   this._host = host
   this._locked = false
   this._bound = false
+  this._listeners = null
   // init
   this._bind(def)
 }
-
-var p = Directive.prototype
 
 /**
  * Initialize the directive, mixin definition properties,
@@ -50,8 +50,11 @@ var p = Directive.prototype
  * @param {Object} def
  */
 
-p._bind = function (def) {
-  if (this.name !== 'cloak' && this.el && this.el.removeAttribute) {
+Directive.prototype._bind = function (def) {
+  if (
+    (this.name !== 'cloak' || this.vm._isCompiled) &&
+    this.el && this.el.removeAttribute
+  ) {
     this.el.removeAttribute(config.prefix + this.name)
   }
   if (typeof def === 'function') {
@@ -77,27 +80,22 @@ p._bind = function (def) {
           }
         }
       : function () {} // noop if no update is provided
-    // use raw expression as identifier because filters
-    // make them different watchers
-    var watcher = this.vm._watchers[this.raw]
-    // v-repeat always creates a new watcher because it has
-    // a special filter that's bound to its directive
-    // instance.
-    if (!watcher || this.name === 'repeat') {
-      watcher = this.vm._watchers[this.raw] = new Watcher(
-        this.vm,
-        this._watcherExp,
-        update, // callback
-        {
-          filters: this.filters,
-          twoWay: this.twoWay,
-          deep: this.deep
-        }
-      )
-    } else {
-      watcher.addCb(update)
-    }
-    this._watcher = watcher
+    // pre-process hook called before the value is piped
+    // through the filters. used in v-repeat.
+    var preProcess = this._preProcess
+      ? _.bind(this._preProcess, this)
+      : null
+    var watcher = this._watcher = new Watcher(
+      this.vm,
+      this._watcherExp,
+      update, // callback
+      {
+        filters: this.filters,
+        twoWay: this.twoWay,
+        deep: this.deep,
+        preProcess: preProcess
+      }
+    )
     if (this._initValue != null) {
       watcher.set(this._initValue)
     } else if (this.update) {
@@ -113,7 +111,7 @@ p._bind = function (def) {
  * e.g. v-component="{{currentView}}"
  */
 
-p._checkDynamicLiteral = function () {
+Directive.prototype._checkDynamicLiteral = function () {
   var expression = this.expression
   if (expression && this.isLiteral) {
     var tokens = textParser.parse(expression)
@@ -137,11 +135,11 @@ p._checkDynamicLiteral = function () {
  * @return {Boolean}
  */
 
-p._checkStatement = function () {
+Directive.prototype._checkStatement = function () {
   var expression = this.expression
   if (
     expression && this.acceptStatement &&
-    !expParser.pathTestRE.test(expression)
+    !expParser.isSimplePath(expression)
   ) {
     var fn = expParser.parse(expression).get
     var vm = this.vm
@@ -149,11 +147,7 @@ p._checkStatement = function () {
       fn.call(vm, vm)
     }
     if (this.filters) {
-      handler = _.applyFilters(
-        handler,
-        this.filters.read,
-        vm
-      )
+      handler = vm._applyFilters(handler, null, this.filters)
     }
     this.update(handler)
     return true
@@ -167,33 +161,13 @@ p._checkStatement = function () {
  * @return {String}
  */
 
-p._checkParam = function (name) {
+Directive.prototype._checkParam = function (name) {
   var param = this.el.getAttribute(name)
   if (param !== null) {
     this.el.removeAttribute(name)
+    param = this.vm.$interpolate(param)
   }
   return param
-}
-
-/**
- * Teardown the watcher and call unbind.
- */
-
-p._teardown = function () {
-  if (this._bound) {
-    if (this.unbind) {
-      this.unbind()
-    }
-    var watcher = this._watcher
-    if (watcher && watcher.active) {
-      watcher.removeCb(this._update)
-      if (!watcher.active) {
-        this.vm._watchers[this.raw] = null
-      }
-    }
-    this._bound = false
-    this.vm = this.el = this._watcher = null
-  }
 }
 
 /**
@@ -202,22 +176,75 @@ p._teardown = function () {
  * e.g. v-model.
  *
  * @param {*} value
- * @param {Boolean} lock - prevent wrtie triggering update.
  * @public
  */
 
-p.set = function (value, lock) {
+Directive.prototype.set = function (value) {
+  /* istanbul ignore else */
   if (this.twoWay) {
-    if (lock) {
-      this._locked = true
+    this._withLock(function () {
+      this._watcher.set(value)
+    })
+  } else if (process.env.NODE_ENV !== 'production') {
+    _.warn(
+      'Directive.set() can only be used inside twoWay' +
+      'directives.'
+    )
+  }
+}
+
+/**
+ * Execute a function while preventing that function from
+ * triggering updates on this directive instance.
+ *
+ * @param {Function} fn
+ */
+
+Directive.prototype._withLock = function (fn) {
+  var self = this
+  self._locked = true
+  fn.call(self)
+  _.nextTick(function () {
+    self._locked = false
+  })
+}
+
+/**
+ * Convenience method that attaches a DOM event listener
+ * to the directive element and autometically tears it down
+ * during unbind.
+ *
+ * @param {String} event
+ * @param {Function} handler
+ */
+
+Directive.prototype.on = function (event, handler) {
+  _.on(this.el, event, handler)
+  ;(this._listeners || (this._listeners = []))
+    .push([event, handler])
+}
+
+/**
+ * Teardown the watcher and call unbind.
+ */
+
+Directive.prototype._teardown = function () {
+  if (this._bound) {
+    this._bound = false
+    if (this.unbind) {
+      this.unbind()
     }
-    this._watcher.set(value)
-    if (lock) {
-      var self = this
-      _.nextTick(function () {
-        self._locked = false
-      })
+    if (this._watcher) {
+      this._watcher.teardown()
     }
+    var listeners = this._listeners
+    if (listeners) {
+      for (var i = 0; i < listeners.length; i++) {
+        _.off(this.el, listeners[i][0], listeners[i][1])
+      }
+    }
+    this.vm = this.el =
+    this._watcher = this._listeners = null
   }
 }
 

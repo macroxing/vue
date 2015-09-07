@@ -23,7 +23,7 @@ if (_.inBrowser) {
       var vm = new Vue({
         el: el,
         components: components,
-        template: '<div v-component="test" v-ref="test"></div>'
+        template: '<test v-ref="test"></test>'
       })
       expect(vm.$.test).toBeTruthy()
       expect(vm.$.test.$options.id).toBe('test')
@@ -34,7 +34,7 @@ if (_.inBrowser) {
         el: el,
         components: components,
         data: { test: 'test' },
-        template: '<div v-component="{{test}}" v-ref="test"></div>'
+        template: '<component is="{{test}}" v-ref="test"></component>'
       })
       expect(vm.$.test.$options.id).toBe('test')
       vm.test = 'test2'
@@ -43,7 +43,7 @@ if (_.inBrowser) {
         vm.test = ''
         _.nextTick(function () {
           expect(vm.$.test).toBeNull()
-          done()          
+          done()
         })
       })
     })
@@ -52,7 +52,7 @@ if (_.inBrowser) {
       var vm = new Vue({
         el: el,
         data: { view: 'test1' },
-        template: '<div v-component="{{view}}"></div>',
+        template: '<component is="{{view}}"></component>',
         components: {
           test1: {
             id: 'test1',
@@ -78,7 +78,7 @@ if (_.inBrowser) {
     it('with v-repeat', function (done) {
       var vm = new Vue({
         el: el,
-        data: { items: [1,2,3,4,5] },
+        data: { items: [1, 2, 3, 4, 5] },
         template: '<div v-repeat="items" v-ref="test"></div>'
       })
       expect(vm.$.test).toBeTruthy()
@@ -94,10 +94,35 @@ if (_.inBrowser) {
       })
     })
 
+    it('object v-repeat', function (done) {
+      var vm = new Vue({
+        el: el,
+        data: {
+          items: {
+            a: 1,
+            b: 2
+          }
+        },
+        template: '<div v-repeat="items" v-ref="test"></div>'
+      })
+      expect(vm.$.test).toBeTruthy()
+      expect(_.isPlainObject(vm.$.test)).toBe(true)
+      expect(vm.$.test.a.$value).toBe(1)
+      expect(vm.$.test.b.$value).toBe(2)
+      vm.items = { c: 3 }
+      _.nextTick(function () {
+        expect(Object.keys(vm.$.test).length).toBe(1)
+        expect(vm.$.test.c.$value).toBe(3)
+        vm._directives[0].unbind()
+        expect(vm.$.test).toBeNull()
+        done()
+      })
+    })
+
     it('nested v-repeat', function () {
       var vm = new Vue({
         el: el,
-        template: '<div v-component="c1" v-ref="c1"></div>',
+        template: '<c1 v-ref="c1"></c1>',
         components: {
           c1: {
             template: '<div v-repeat="2" v-ref="c2"></div>'
@@ -111,12 +136,11 @@ if (_.inBrowser) {
     })
 
     it('should warn on non-root', function () {
-      var vm = new Vue({
+      new Vue({
         el: el,
         template: '<div v-ref="test"></div>'
       })
-      expect(_.warn).toHaveBeenCalled()
+      expect(hasWarned(_, 'should only be used on a component root element')).toBe(true)
     })
-
   })
 }

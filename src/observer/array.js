@@ -42,7 +42,7 @@ var arrayMethods = Object.create(arrayProto)
     }
     if (inserted) ob.observeArray(inserted)
     // notify change
-    ob.notify()
+    ob.dep.notify()
     return result
   })
 })
@@ -78,11 +78,13 @@ _.define(
   arrayProto,
   '$remove',
   function $remove (index) {
+    /* istanbul ignore if */
+    if (!this.length) return
     if (typeof index !== 'number') {
-      index = this.indexOf(index)
+      index = _.indexOf(this, index)
     }
     if (index > -1) {
-      return this.splice(index, 1)[0]
+      return this.splice(index, 1)
     }
   }
 )

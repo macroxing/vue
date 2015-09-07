@@ -65,14 +65,16 @@ exports.parse = function (text) {
   if (hit) {
     return hit
   }
+  text = text.replace(/\n/g, '')
   if (!tagRE.test(text)) {
     return null
   }
   var tokens = []
   var lastIndex = tagRE.lastIndex = 0
-  var match, index, value, first, oneTime, partial
-  /* jshint boss:true */
+  var match, index, value, first, oneTime, twoWay
+  /* eslint-disable no-cond-assign */
   while (match = tagRE.exec(text)) {
+  /* eslint-enable no-cond-assign */
     index = match.index
     // push text token
     if (index > lastIndex) {
@@ -82,9 +84,9 @@ exports.parse = function (text) {
     }
     // tag token
     first = match[1].charCodeAt(0)
-    oneTime = first === 0x2A // *
-    partial = first === 0x3E // >
-    value = (oneTime || partial)
+    oneTime = first === 42 // *
+    twoWay = first === 64  // @
+    value = oneTime || twoWay
       ? match[1].slice(1)
       : match[1]
     tokens.push({
@@ -92,7 +94,7 @@ exports.parse = function (text) {
       value: value.trim(),
       html: htmlRE.test(match[0]),
       oneTime: oneTime,
-      partial: partial
+      twoWay: twoWay
     })
     lastIndex = index + match[0].length
   }
@@ -136,9 +138,7 @@ function formatToken (token, vm, single) {
   return token.tag
     ? vm && token.oneTime
       ? '"' + vm.$eval(token.value) + '"'
-      : single
-        ? token.value
-        : inlineFilters(token.value)
+      : inlineFilters(token.value, single)
     : '"' + token.value + '"'
 }
 
@@ -151,29 +151,26 @@ function formatToken (token, vm, single) {
  * to directive parser and watcher mechanism.
  *
  * @param {String} exp
+ * @param {Boolean} single
  * @return {String}
  */
 
 var filterRE = /[^|]\|[^|]/
-function inlineFilters (exp) {
+function inlineFilters (exp, single) {
   if (!filterRE.test(exp)) {
-    return '(' + exp + ')'
+    return single
+      ? exp
+      : '(' + exp + ')'
   } else {
     var dir = dirParser.parse(exp)[0]
     if (!dir.filters) {
       return '(' + exp + ')'
     } else {
-      exp = dir.expression
-      for (var i = 0, l = dir.filters.length; i < l; i++) {
-        var filter = dir.filters[i]
-        var args = filter.args
-          ? ',"' + filter.args.join('","') + '"'
-          : ''
-        filter = 'this.$options.filters["' + filter.name + '"]'
-        exp = '(' + filter + '.read||' + filter + ')' +
-          '.apply(this,[' + exp + args + '])'
-      }
-      return exp
+      return 'this._applyFilters(' +
+        dir.expression + // value
+        ',null,' +       // oldValue (null for read)
+        JSON.stringify(dir.filters) + // filter descriptors
+        ',false)'        // write?
     }
   }
 }

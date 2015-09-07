@@ -2,6 +2,18 @@ var _ = require('../util')
 var transition = require('../transition')
 
 /**
+ * Convenience on-instance nextTick. The callback is
+ * auto-bound to the instance, and this avoids component
+ * modules having to rely on the global Vue.
+ *
+ * @param {Function} fn
+ */
+
+exports.$nextTick = function (fn) {
+  _.nextTick(fn, this)
+}
+
+/**
  * Append instance to target
  *
  * @param {Node} target
@@ -75,6 +87,9 @@ exports.$after = function (target, cb, withTransition) {
  */
 
 exports.$remove = function (cb, withTransition) {
+  if (!this.$el.parentNode) {
+    return cb && cb()
+  }
   var inDoc = this._isAttached && _.inDoc(this.$el)
   // if we are not in document, no need to check
   // for transitions
@@ -86,7 +101,7 @@ exports.$remove = function (cb, withTransition) {
     if (cb) cb()
   }
   if (
-    this._isBlock &&
+    this._isFragment &&
     !this._blockFragment.hasChildNodes()
   ) {
     op = withTransition === false
@@ -124,7 +139,7 @@ function insert (vm, target, cb, withTransition, op1, op2) {
     !targetIsDetached &&
     !vm._isAttached &&
     !_.inDoc(vm.$el)
-  if (vm._isBlock) {
+  if (vm._isFragment) {
     blockOp(vm, target, op, cb)
   } else {
     op(vm.$el, target, vm, cb)
@@ -136,7 +151,7 @@ function insert (vm, target, cb, withTransition, op1, op2) {
 }
 
 /**
- * Execute a transition operation on a block instance,
+ * Execute a transition operation on a fragment instance,
  * iterating through all its block nodes.
  *
  * @param {Vue} vm
@@ -146,8 +161,8 @@ function insert (vm, target, cb, withTransition, op1, op2) {
  */
 
 function blockOp (vm, target, op, cb) {
-  var current = vm._blockStart
-  var end = vm._blockEnd
+  var current = vm._fragmentStart
+  var end = vm._fragmentEnd
   var next
   while (next !== end) {
     next = current.nextSibling

@@ -35,11 +35,13 @@ extend(Vue, require('./api/global'))
  */
 
 Vue.options = {
-  directives  : require('./directives'),
-  filters     : require('./filters'),
-  partials    : {},
-  transitions : {},
-  components  : {}
+  replace: true,
+  directives: require('./directives'),
+  elementDirectives: require('./element-directives'),
+  filters: require('./filters'),
+  transitions: {},
+  components: {},
+  partials: {}
 }
 
 /**
@@ -58,7 +60,9 @@ Object.defineProperty(p, '$data', {
     return this._data
   },
   set: function (newData) {
-    this._setData(newData)
+    if (newData !== this._data) {
+      this._setData(newData)
+    }
   }
 })
 
@@ -70,6 +74,7 @@ extend(p, require('./instance/init'))
 extend(p, require('./instance/events'))
 extend(p, require('./instance/scope'))
 extend(p, require('./instance/compile'))
+extend(p, require('./instance/misc'))
 
 /**
  * Mixin public API methods

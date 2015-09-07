@@ -14,8 +14,8 @@ describe('Directive', function () {
       unbind: jasmine.createSpy('unbind')
     }
     vm = new Vue({
-      data:{
-        a:1,
+      data: {
+        a: 1,
         b: { c: { d: 2 }}
       },
       filters: {
@@ -33,7 +33,7 @@ describe('Directive', function () {
     var d = new Directive('test', el, vm, {
       expression: 'a',
       arg: 'someArg',
-      filters: [{name:'test'}]
+      filters: [{name: 'test'}]
     }, def)
     // properties
     expect(d.el).toBe(el)
@@ -111,7 +111,7 @@ describe('Directive', function () {
     }
     var d = new Directive('test', el, vm, {
       expression: 'a++',
-      filters: [{name:'test'}]
+      filters: [{name: 'test'}]
     }, def)
     expect(d._watcher).toBeUndefined()
     expect(d.bind).toHaveBeenCalled()
@@ -131,27 +131,20 @@ describe('Directive', function () {
     }
     var d = new Directive('test', el, vm, {
       expression: 'a',
-      filters: [{name:'test'}]
+      filters: [{name: 'test'}]
     }, def)
     d.set(2)
     expect(vm.a).toBe(6)
     nextTick(function () {
-      expect(def.update.calls.count()).toBe(2)
-      expect(def.update).toHaveBeenCalledWith(6, 1)
-      // locked set
-      d.set(3, true)
-      expect(vm.a).toBe(9)
-      nextTick(function () {
-        // should have no update calls
-        expect(def.update.calls.count()).toBe(2)
-        done()
-      })
+      // should have no update calls
+      expect(def.update.calls.count()).toBe(1)
+      done()
     })
   })
 
   it('deep', function (done) {
     def.deep = true
-    var d = new Directive('test', el, vm, {
+    new Directive('test', el, vm, {
       expression: 'b'
     }, def)
     vm.b.c.d = 3
@@ -168,26 +161,4 @@ describe('Directive', function () {
     expect(d.update).toBe(def.update)
     expect(def.update).toHaveBeenCalled()
   })
-
-  it('reuse the same watcher', function (done) {
-    var d = new Directive('test', el, vm, {
-      expression: 'a',
-    }, def)
-    var d2 = new Directive('test', el, vm, {
-      expression: 'a',
-    }, def)
-    expect(vm._watcherList.length).toBe(1)
-    expect(d._watcher).toBe(d2._watcher)
-    d2._teardown()
-    expect(d2._watcher).toBeNull()
-    expect(vm._watcherList.length).toBe(1)
-    vm.a = 2
-    nextTick(function () {
-      expect(def.update).toHaveBeenCalledWith(2, 1)
-      d._teardown()
-      expect(vm._watcherList.length).toBe(0)
-      done()
-    })
-  })
-
 })

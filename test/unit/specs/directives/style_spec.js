@@ -12,7 +12,7 @@ function checkPrefixedProp (prop) {
       if ((prefixes[i] + upper) in el.style) {
         prop = prefixes[i] + upper
       }
-    }  
+    }
   }
   return prop
 }
@@ -24,7 +24,7 @@ if (_.inBrowser) {
     beforeEach(function () {
       el = document.createElement('div')
       dir = { el: el }
-      _.extend(dir, def)      
+      _.extend(dir, def)
     })
 
     it('normal with arg', function () {
@@ -72,14 +72,20 @@ if (_.inBrowser) {
     })
 
     it('update with object', function () {
+      el.style.padding = '10px'
       dir.update({color: 'red', marginRight: '30px'})
       expect(el.style.getPropertyValue('color')).toBe('red')
       expect(el.style.getPropertyValue('margin-right')).toBe('30px')
+      expect(el.style.getPropertyValue('padding')).toBe('10px')
+      dir.update({color: 'blue', padding: null })
+      expect(el.style.getPropertyValue('color')).toBe('blue')
+      expect(el.style.getPropertyValue('margin-right')).toBeFalsy()
+      expect(el.style.getPropertyValue('padding')).toBeFalsy()
     })
 
     it('update with object and auto prefix', function () {
       var prop = checkPrefixedProp('transform')
-      var val = 'scale(0.5)';
+      var val = 'scale(0.5)'
       dir.update({transform: val})
       expect(el.style[prop]).toBe(val)
     })

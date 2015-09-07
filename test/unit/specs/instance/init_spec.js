@@ -14,7 +14,6 @@ describe('Instance Init', function () {
 
   var options = {
     a: 2,
-    _anonymous: true,
     el: {}
   }
 
@@ -24,9 +23,7 @@ describe('Instance Init', function () {
     expect(stub.$el).toBe(null)
     expect(stub.$root).toBe(stub)
     expect(stub.$).toBeTruthy()
-    expect(stub._watcherList).toBeTruthy()
     expect(stub._watchers).toBeTruthy()
-    expect(stub._userWatchers).toBeTruthy()
     expect(stub._directives).toBeTruthy()
     expect(stub._events).toBeTruthy()
     expect(stub._eventsCount).toBeTruthy()
@@ -49,5 +46,4 @@ describe('Instance Init', function () {
   it('should call $mount when options.el is present', function () {
     expect(stub.$mount).toHaveBeenCalledWith(stub.$options.el)
   })
-
 })

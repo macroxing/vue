@@ -15,15 +15,16 @@ module.exports = {
       this.iframeBind = function () {
         _.on(self.el.contentWindow, self.arg, self.handler)
       }
-      _.on(this.el, 'load', this.iframeBind)
+      this.on('load', this.iframeBind)
     }
   },
 
   update: function (handler) {
     if (typeof handler !== 'function') {
-      _.warn(
-        'Directive "v-on:' + this.expression + '" ' +
-        'expects a function value.'
+      process.env.NODE_ENV !== 'production' && _.warn(
+        'Directive v-on="' + this.arg + ': ' +
+        this.expression + '" expects a function value, ' +
+        'got ' + handler
       )
       return
     }
@@ -54,6 +55,5 @@ module.exports = {
 
   unbind: function () {
     this.reset()
-    _.off(this.el, 'load', this.iframeBind)
   }
 }

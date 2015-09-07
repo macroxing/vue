@@ -1,6 +1,8 @@
 var _ = require('../util')
+var compiler = require('../compiler')
 var Observer = require('../observer')
 var Dep = require('../observer/dep')
+var Watcher = require('../watcher')
 
 /**
  * Setup the scope of an instance, which contains:
@@ -11,22 +13,60 @@ var Dep = require('../observer/dep')
  */
 
 exports._initScope = function () {
+  this._initProps()
+  this._initMeta()
+  this._initMethods()
   this._initData()
   this._initComputed()
-  this._initMethods()
-  this._initMeta()
 }
 
 /**
- * Initialize the data. 
+ * Initialize props.
+ */
+
+exports._initProps = function () {
+  var options = this.$options
+  var el = options.el
+  var props = options.props
+  if (props && !el) {
+    process.env.NODE_ENV !== 'production' && _.warn(
+      'Props will not be compiled if no `el` option is ' +
+      'provided at instantiation.'
+    )
+  }
+  // make sure to convert string selectors into element now
+  el = options.el = _.query(el)
+  this._propsUnlinkFn = el && el.nodeType === 1 && props
+    ? compiler.compileAndLinkProps(
+        this, el, props
+      )
+    : null
+}
+
+/**
+ * Initialize the data.
  */
 
 exports._initData = function () {
-  // proxy data on instance
+  var propsData = this._data
+  var optionsDataFn = this.$options.data
+  var optionsData = optionsDataFn && optionsDataFn()
+  if (optionsData) {
+    this._data = optionsData
+    for (var prop in propsData) {
+      if (
+        this._props[prop].raw !== null ||
+        !optionsData.hasOwnProperty(prop)
+      ) {
+        optionsData.$set(prop, propsData[prop])
+      }
+    }
+  }
   var data = this._data
+  // proxy data on instance
   var keys = Object.keys(data)
-  var i = keys.length
-  var key
+  var i, key
+  i = keys.length
   while (i--) {
     key = keys[i]
     if (!_.isReserved(key)) {
@@ -34,7 +74,7 @@ exports._initData = function () {
     }
   }
   // observe data
-  Observer.create(data).addVm(this)
+  Observer.create(data, this)
 }
 
 /**
@@ -48,6 +88,19 @@ exports._setData = function (newData) {
   var oldData = this._data
   this._data = newData
   var keys, key, i
+  // copy props.
+  // this should only happen during a v-repeat of component
+  // that also happens to have compiled props.
+  var props = this.$options.props
+  if (props) {
+    i = props.length
+    while (i--) {
+      key = props[i].name
+      if (key !== '$data' && !newData.hasOwnProperty(key)) {
+        newData.$set(key, oldData[key])
+      }
+    }
+  }
   // unproxy keys not present in new data
   keys = Object.keys(oldData)
   i = keys.length
@@ -69,7 +122,7 @@ exports._setData = function (newData) {
     }
   }
   oldData.__ob__.removeVm(this)
-  Observer.create(newData).addVm(this)
+  Observer.create(newData, this)
   this._digest()
 }
 
@@ -112,11 +165,11 @@ exports._unproxy = function (key) {
  */
 
 exports._digest = function () {
-  var i = this._watcherList.length
+  var i = this._watchers.length
   while (i--) {
-    this._watcherList[i].update()
+    this._watchers[i].update(true) // shallow updates
   }
-  var children = this._children
+  var children = this.$children
   i = children.length
   while (i--) {
     var child = children[i]
@@ -142,11 +195,13 @@ exports._initComputed = function () {
         configurable: true
       }
       if (typeof userDef === 'function') {
-        def.get = _.bind(userDef, this)
+        def.get = makeComputedGetter(userDef, this)
         def.set = noop
       } else {
         def.get = userDef.get
-          ? _.bind(userDef.get, this)
+          ? userDef.cache !== false
+            ? makeComputedGetter(userDef.get, this)
+            : _.bind(userDef.get, this)
           : noop
         def.set = userDef.set
           ? _.bind(userDef.set, this)
@@ -154,6 +209,21 @@ exports._initComputed = function () {
       }
       Object.defineProperty(this, key, def)
     }
+  }
+}
+
+function makeComputedGetter (getter, owner) {
+  var watcher = new Watcher(owner, getter, null, {
+    lazy: true
+  })
+  return function computedGetter () {
+    if (watcher.dirty) {
+      watcher.evaluate()
+    }
+    if (Dep.target) {
+      watcher.depend()
+    }
+    return watcher.value
   }
 }
 
@@ -196,11 +266,9 @@ exports._initMeta = function () {
 exports._defineMeta = function (key, value) {
   var dep = new Dep()
   Object.defineProperty(this, key, {
-    enumerable: true,
-    configurable: true,
     get: function metaGetter () {
-      if (Observer.target) {
-        Observer.target.addDep(dep)
+      if (Dep.target) {
+        dep.depend()
       }
       return value
     },

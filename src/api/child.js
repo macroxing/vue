@@ -1,7 +1,7 @@
 var _ = require('../util')
 
 /**
- * Create a child instance that prototypally inehrits
+ * Create a child instance that prototypally inherits
  * data on parent. To achieve that we create an intermediate
  * constructor with its prototype pointing to parent.
  *
@@ -33,7 +33,10 @@ exports.$addChild = function (opts, BaseCtor) {
         'this._init(options) }'
       )()
       ChildVue.options = BaseCtor.options
-      ChildVue.prototype = this
+      ChildVue.linker = BaseCtor.linker
+      // important: transcluded inline repeaters should
+      // inherit from outer scope rather than host
+      ChildVue.prototype = opts._context || this
       ctors[BaseCtor.cid] = ChildVue
     }
   } else {

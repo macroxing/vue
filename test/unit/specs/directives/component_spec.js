@@ -16,9 +16,9 @@ if (_.inBrowser) {
     })
 
     it('static', function () {
-      var vm = new Vue({
+      new Vue({
         el: el,
-        template: '<div v-component="test"></div>',
+        template: '<test></test>',
         components: {
           test: {
             data: function () {
@@ -28,13 +28,13 @@ if (_.inBrowser) {
           }
         }
       })
-      expect(el.innerHTML).toBe('<div>123</div><!--v-component-->')
+      expect(el.innerHTML).toBe('<test>123</test>')
     })
 
     it('replace', function () {
-      var vm = new Vue({
+      new Vue({
         el: el,
-        template: '<div v-component="test"></div>',
+        template: '<test></test>',
         components: {
           test: {
             replace: true,
@@ -45,13 +45,30 @@ if (_.inBrowser) {
           }
         }
       })
-      expect(el.innerHTML).toBe('<p>123</p><!--v-component-->')
+      expect(el.innerHTML).toBe('<p>123</p>')
+    })
+
+    it('allow v-component on table elements', function () {
+      var vm = new Vue({
+        el: el,
+        template: '<table><tbody><tr v-component="test"></tr></tbody></table>',
+        components: {
+          test: {
+            data: function () {
+              return { a: 123 }
+            },
+            template: '<td>{{a}}</td>'
+          }
+        }
+      })
+      expect(el.innerHTML).toBe(vm.$options.template.replace(/<tr.*\/tr>/, '<tr><td>123</td></tr>'))
+      expect(_.warn).not.toHaveBeenCalled()
     })
 
     it('inline-template', function () {
-      var vm = new Vue({
+      new Vue({
         el: el,
-        template: '<div v-component="test" inline-template>{{a}}</div>',
+        template: '<test inline-template>{{a}}</test>',
         data: {
           a: 'parent'
         },
@@ -64,13 +81,13 @@ if (_.inBrowser) {
           }
         }
       })
-      expect(el.innerHTML).toBe('<div>child</div><!--v-component-->')
+      expect(el.innerHTML).toBe('<test>child</test>')
     })
 
     it('block replace', function () {
-      var vm = new Vue({
+      new Vue({
         el: el,
-        template: '<div v-component="test"></div>',
+        template: '<test></test>',
         components: {
           test: {
             replace: true,
@@ -81,38 +98,40 @@ if (_.inBrowser) {
           }
         }
       })
-      expect(el.innerHTML).toBe('<!--v-start--><p>123</p><p>234</p><!--v-end--><!--v-component-->')
+      expect(el.innerHTML).toBe('<p>123</p><p>234</p>')
     })
 
     it('dynamic', function (done) {
       var vm = new Vue({
         el: el,
-        template: '<div v-component="{{view}}" v-attr="view:view"></div>',
+        template: '<component is="{{view}}" v-attr="view:view"></component>',
         data: {
-          view: 'a'
+          view: 'view-a'
         },
         components: {
-          a: {
-            template: 'AAA',
+          'view-a': {
+            template: '<div>AAA</div>',
+            replace: true,
             data: function () {
               return { view: 'a' }
             }
           },
-          b: {
-            template: 'BBB',
+          'view-b': {
+            template: '<div>BBB</div>',
+            replace: true,
             data: function () {
               return { view: 'b' }
             }
           }
         }
       })
-      expect(el.innerHTML).toBe('<div view="a">AAA</div><!--v-component-->')
-      vm.view = 'b'
+      expect(el.innerHTML).toBe('<div view="view-a">AAA</div>')
+      vm.view = 'view-b'
       _.nextTick(function () {
-        expect(el.innerHTML).toBe('<div view="b">BBB</div><!--v-component-->')
+        expect(el.innerHTML).toBe('<div view="view-b">BBB</div>')
         vm.view = ''
         _.nextTick(function () {
-          expect(el.innerHTML).toBe('<!--v-component-->')
+          expect(el.innerHTML).toBe('')
           done()
         })
       })
@@ -123,37 +142,39 @@ if (_.inBrowser) {
       var spyB = jasmine.createSpy()
       var vm = new Vue({
         el: el,
-        template: '<div v-component="{{view}}" keep-alive></div>',
+        template: '<component is="{{view}}" keep-alive></component>',
         data: {
-          view: 'a'
+          view: 'view-a'
         },
         components: {
-          a: {
+          'view-a': {
             created: spyA,
-            template: 'AAA'
+            template: '<div>AAA</div>',
+            replace: true
           },
-          b: {
+          'view-b': {
             created: spyB,
-            template: 'BBB'
+            template: '<div>BBB</div>',
+            replace: true
           }
         }
       })
-      expect(el.innerHTML).toBe('<div>AAA</div><!--v-component-->')
+      expect(el.innerHTML).toBe('<div>AAA</div>')
       expect(spyA.calls.count()).toBe(1)
       expect(spyB.calls.count()).toBe(0)
-      vm.view = 'b'
+      vm.view = 'view-b'
       _.nextTick(function () {
-        expect(el.innerHTML).toBe('<div>BBB</div><!--v-component-->')
+        expect(el.innerHTML).toBe('<div>BBB</div>')
         expect(spyA.calls.count()).toBe(1)
         expect(spyB.calls.count()).toBe(1)
-        vm.view = 'a'
+        vm.view = 'view-a'
         _.nextTick(function () {
-          expect(el.innerHTML).toBe('<div>AAA</div><!--v-component-->')
+          expect(el.innerHTML).toBe('<div>AAA</div>')
           expect(spyA.calls.count()).toBe(1)
           expect(spyB.calls.count()).toBe(1)
-          vm.view = 'b'
+          vm.view = 'view-b'
           _.nextTick(function () {
-            expect(el.innerHTML).toBe('<div>BBB</div><!--v-component-->')
+            expect(el.innerHTML).toBe('<div>BBB</div>')
             expect(spyA.calls.count()).toBe(1)
             expect(spyB.calls.count()).toBe(1)
             done()
@@ -169,7 +190,7 @@ if (_.inBrowser) {
           ok: false,
           message: 'hello'
         },
-        template: '<div v-component="test" v-show="ok">{{message}}</div>',
+        template: '<test v-show="ok">{{message}}</test>',
         components: {
           test: {
             template: '<div><content></content> {{message}}</div>',
@@ -200,7 +221,7 @@ if (_.inBrowser) {
           ok: false,
           message: 'hello'
         },
-        template: '<div v-component="test" v-if="ok">{{message}}</div>',
+        template: '<test v-if="ok">{{message}}</test>',
         components: {
           test: {
             template: '<content></content> {{message}}',
@@ -213,58 +234,138 @@ if (_.inBrowser) {
         }
       })
       expect(el.textContent).toBe('')
-      expect(vm._children.length).toBe(0)
+      expect(vm.$children.length).toBe(0)
       expect(vm._directives.length).toBe(1) // v-if
       vm.ok = true
       _.nextTick(function () {
-        expect(vm._children.length).toBe(1)
+        expect(vm.$children.length).toBe(1)
         expect(vm._directives.length).toBe(3) // v-if, v-component, v-text
         expect(el.textContent).toBe('hello world')
         done()
       })
     })
 
-    it('paramAttributes', function () {
-      var vm = new Vue({
+    it('props', function () {
+      new Vue({
         el: el,
         data: {
-          list: [{a:1}, {a:2}]
+          list: [{a: 1}, {a: 2}]
         },
-        template: '<ul v-component="test" collection="{{list}}"></ul>',
+        template: '<test collection="{{list}}"></test>',
         components: {
           test: {
-            template: '<li v-repeat="collection">{{a}}</li>',
-            paramAttributes: ['collection']
+            template: '<ul><li v-repeat="collection">{{a}}</li></ul>',
+            replace: true,
+            props: ['collection']
           }
         }
       })
-      expect(el.innerHTML).toBe('<ul><li>1</li><li>2</li><!--v-repeat--></ul><!--v-component-->')
+      expect(el.innerHTML).toBe('<ul><li>1</li><li>2</li></ul>')
     })
 
-    it('wait-for', function (done) {
+    it('wait-for for static component', function () {
+      var vm = new Vue({
+        el: el,
+        template: '<view-a wait-for="ok"></view-a>',
+        components: {
+          'view-a': {
+            template: 'AAA'
+          }
+        }
+      })
+      expect(el.textContent).toBe('')
+      vm.$children[0].$emit('ok')
+      expect(el.textContent).toBe('AAA')
+    })
+
+    it('sync wait-for inside compiled hook', function () {
+      new Vue({
+        el: el,
+        template: '<view-a wait-for="ok"></view-a>',
+        components: {
+          'view-a': {
+            template: 'AAA',
+            compiled: function () {
+              expect(el.textContent).toBe('')
+              this.$emit('ok')
+            }
+          }
+        }
+      })
+      expect(el.textContent).toBe('AAA')
+    })
+
+    it('wait-for for dynamic components', function (done) {
       var vm = new Vue({
         el: el,
         data: {
-          view: 'a'
+          view: 'view-a'
         },
-        template: '<div v-component="{{view}}" wait-for="ok"></div>',
+        template: '<component is="{{view}}" wait-for="ok"></component>',
         components: {
-          a: {
+          'view-a': {
             template: 'AAA'
           },
-          b: {
+          'view-b': {
             template: 'BBB'
           }
         }
       })
-      vm._children[0].$emit('ok')
-      vm.view = 'b'
+      vm.$children[0].$emit('ok')
+      expect(el.textContent).toBe('AAA')
+      vm.view = 'view-b'
       _.nextTick(function () {
         expect(el.textContent).toBe('AAA')
         // old vm is already removed, this is the new vm
-        vm._children[0].$emit('ok')
+        expect(vm.$children.length).toBe(1)
+        vm.$children[0].$emit('ok')
         expect(el.textContent).toBe('BBB')
-        done()
+        // ensure switching before ready event correctly
+        // cleans up the component being waited on.
+        // see #1152
+        vm.view = 'view-a'
+        _.nextTick(function () {
+          vm.view = 'view-b'
+          _.nextTick(function () {
+            expect(vm.$children.length).toBe(1)
+            expect(vm.$children[0].$el.textContent).toBe('BBB')
+            done()
+          })
+        })
+      })
+    })
+
+    // #1150
+    it('wait-for + keep-alive', function (done) {
+      var vm = new Vue({
+        el: el,
+        data: {
+          view: 'view-a'
+        },
+        template: '<component is="{{view}}" wait-for="ok" keep-alive></component>',
+        components: {
+          'view-a': {
+            template: 'AAA'
+          },
+          'view-b': {
+            template: 'BBB'
+          }
+        }
+      })
+      vm.$children[0].$emit('ok')
+      expect(el.textContent).toBe('AAA')
+      vm.view = 'view-b'
+      _.nextTick(function () {
+        expect(vm.$children.length).toBe(2)
+        vm.$children[1].$emit('ok')
+        expect(el.textContent).toBe('BBB')
+        vm.view = 'view-a'
+        _.nextTick(function () {
+          // should switch without the need to emit
+          // because of keep-alive
+          expect(el.textContent).toBe('AAA')
+          done()
+        })
       })
     })
 
@@ -275,12 +376,12 @@ if (_.inBrowser) {
       var vm = new Vue({
         el: el,
         data: {
-          view: 'a'
+          view: 'view-a'
         },
-        template: '<div v-component="{{view}}" v-transition="test" transition-mode="in-out"></div>',
+        template: '<component is="{{view}}" v-transition="test" transition-mode="in-out"></component>',
         components: {
-          a: { template: 'AAA' },
-          b: { template: 'BBB' }
+          'view-a': { template: 'AAA' },
+          'view-b': { template: 'BBB' }
         },
         transitions: {
           test: {
@@ -290,21 +391,25 @@ if (_.inBrowser) {
             },
             leave: function (el, done) {
               spy2()
-              done()
+              _.nextTick(done)
             }
           }
         }
       })
       expect(el.textContent).toBe('AAA')
-      vm.view = 'b'
+      vm.view = 'view-b'
       _.nextTick(function () {
         expect(spy1).toHaveBeenCalled()
         expect(spy2).not.toHaveBeenCalled()
         expect(el.textContent).toBe('AAABBB')
         next()
-        expect(spy2).toHaveBeenCalled()
-        expect(el.textContent).toBe('BBB')
-        done()
+        _.nextTick(function () {
+          expect(spy2).toHaveBeenCalled()
+          _.nextTick(function () {
+            expect(el.textContent).toBe('BBB')
+            done()
+          })
+        })
       })
     })
 
@@ -315,18 +420,18 @@ if (_.inBrowser) {
       var vm = new Vue({
         el: el,
         data: {
-          view: 'a'
+          view: 'view-a'
         },
-        template: '<div v-component="{{view}}" v-transition="test" transition-mode="out-in"></div>',
+        template: '<component is="{{view}}" v-transition="test" transition-mode="out-in"></component>',
         components: {
-          a: { template: 'AAA' },
-          b: { template: 'BBB' }
+          'view-a': { template: 'AAA' },
+          'view-b': { template: 'BBB' }
         },
         transitions: {
           test: {
             enter: function (el, done) {
               spy2()
-              done()
+              _.nextTick(done)
             },
             leave: function (el, done) {
               spy1()
@@ -336,7 +441,7 @@ if (_.inBrowser) {
         }
       })
       expect(el.textContent).toBe('AAA')
-      vm.view = 'b'
+      vm.view = 'view-b'
       _.nextTick(function () {
         expect(spy1).toHaveBeenCalled()
         expect(spy2).not.toHaveBeenCalled()
@@ -351,7 +456,7 @@ if (_.inBrowser) {
     it('teardown', function (done) {
       var vm = new Vue({
         el: el,
-        template: '<div v-component="{{view}}" keep-alive></div>',
+        template: '<component is="{{view}}" keep-alive></component>',
         data: {
           view: 'test'
         },
@@ -362,12 +467,12 @@ if (_.inBrowser) {
       })
       vm.view = 'test2'
       _.nextTick(function () {
-        expect(vm._children.length).toBe(2)
-        var child = vm._children[0]
-        var child2 = vm._children[1]
+        expect(vm.$children.length).toBe(2)
+        var child = vm.$children[0]
+        var child2 = vm.$children[1]
         vm._directives[0].unbind()
         expect(vm._directives[0].cache).toBeNull()
-        expect(vm._children.length).toBe(0)
+        expect(vm.$children.length).toBe(0)
         expect(child._isDestroyed).toBe(true)
         expect(child2._isDestroyed).toBe(true)
         done()
@@ -375,11 +480,20 @@ if (_.inBrowser) {
     })
 
     it('already mounted warn', function () {
-      el.setAttribute('v-component', 'test')
-      var vm = new Vue({
+      el.setAttribute('v-_component', 'test')
+      new Vue({
         el: el
       })
-      expect(_.warn).toHaveBeenCalled()
+      expect(hasWarned(_, 'cannot mount component "test" on already mounted element')).toBe(true)
+    })
+
+    it('not found component should not throw', function () {
+      expect(function () {
+        new Vue({
+          el: el,
+          template: '<div v-component="non-existent"></div>'
+        })
+      }).not.toThrow()
     })
 
   })

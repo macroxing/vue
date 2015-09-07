@@ -1,12 +1,9 @@
 var _ = require('../util')
-var applyCSSTransition = require('./css')
-var applyJSTransition = require('./js')
-var doc = typeof document === 'undefined' ? null : document
 
 /**
  * Append with transition.
  *
- * @oaram {Element} el
+ * @param {Element} el
  * @param {Element} target
  * @param {Vue} vm
  * @param {Function} [cb]
@@ -21,7 +18,7 @@ exports.append = function (el, target, vm, cb) {
 /**
  * InsertBefore with transition.
  *
- * @oaram {Element} el
+ * @param {Element} el
  * @param {Element} target
  * @param {Vue} vm
  * @param {Function} [cb]
@@ -36,7 +33,7 @@ exports.before = function (el, target, vm, cb) {
 /**
  * Remove with transition.
  *
- * @oaram {Element} el
+ * @param {Element} el
  * @param {Vue} vm
  * @param {Function} [cb]
  */
@@ -51,7 +48,7 @@ exports.remove = function (el, vm, cb) {
  * Remove by appending to another parent with transition.
  * This is only used in block operations.
  *
- * @oaram {Element} el
+ * @param {Element} el
  * @param {Element} target
  * @param {Vue} vm
  * @param {Function} [cb]
@@ -99,7 +96,7 @@ exports.blockRemove = function (start, end, vm) {
 /**
  * Apply transitions with an operation callback.
  *
- * @oaram {Element} el
+ * @param {Element} el
  * @param {Number} direction
  *                  1: enter
  *                 -1: leave
@@ -109,9 +106,13 @@ exports.blockRemove = function (start, end, vm) {
  */
 
 var apply = exports.apply = function (el, direction, op, vm, cb) {
-  var transData = el.__v_trans
+  var transition = el.__v_trans
   if (
-    !transData ||
+    !transition ||
+    // skip if there are no js hooks and CSS transition is
+    // not supported
+    (!transition.hooks && !_.transitionEndEvent) ||
+    // skip transitions for initial compile
     !vm._isCompiled ||
     // if the vm is being manipulated by a parent directive
     // during the parent's compilation phase, skip the
@@ -122,39 +123,6 @@ var apply = exports.apply = function (el, direction, op, vm, cb) {
     if (cb) cb()
     return
   }
-  // determine the transition type on the element
-  var jsTransition = transData.fns
-  if (jsTransition) {
-    // js
-    applyJSTransition(
-      el,
-      direction,
-      op,
-      transData,
-      jsTransition,
-      vm,
-      cb
-    )
-  } else if (
-    _.transitionEndEvent &&
-    // skip CSS transitions if page is not visible -
-    // this solves the issue of transitionend events not
-    // firing until the page is visible again.
-    // pageVisibility API is supported in IE10+, same as
-    // CSS transitions.
-    !(doc && doc.hidden)
-  ) {
-    // css
-    applyCSSTransition(
-      el,
-      direction,
-      op,
-      transData,
-      cb
-    )
-  } else {
-    // not applicable
-    op()
-    if (cb) cb()
-  }
+  var action = direction > 0 ? 'enter' : 'leave'
+  transition[action](op, cb)
 }

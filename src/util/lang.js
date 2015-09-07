@@ -25,20 +25,37 @@ exports.toString = function (value) {
 }
 
 /**
- * Check and convert possible numeric numbers before
- * setting back to data
+ * Check and convert possible numeric strings to numbers
+ * before setting back to data
  *
  * @param {*} value
  * @return {*|Number}
  */
 
 exports.toNumber = function (value) {
-  return (
-    isNaN(value) ||
-    value === null ||
-    typeof value === 'boolean'
-  ) ? value
-    : Number(value)
+  if (typeof value !== 'string') {
+    return value
+  } else {
+    var parsed = Number(value)
+    return isNaN(parsed)
+      ? value
+      : parsed
+  }
+}
+
+/**
+ * Convert string boolean literals into real booleans.
+ *
+ * @param {*} value
+ * @return {*|Boolean}
+ */
+
+exports.toBoolean = function (value) {
+  return value === 'true'
+    ? true
+    : value === 'false'
+      ? false
+      : value
 }
 
 /**
@@ -57,26 +74,31 @@ exports.stripQuotes = function (str) {
 }
 
 /**
- * Replace helper
- *
- * @param {String} _ - matched delimiter
- * @param {String} c - matched char
- * @return {String}
- */
-function toUpper (_, c) {
-  return c ? c.toUpperCase () : ''
-}
-
-/**
  * Camelize a hyphen-delmited string.
  *
  * @param {String} str
  * @return {String}
  */
 
-var camelRE = /-(\w)/g
 exports.camelize = function (str) {
-  return str.replace(camelRE, toUpper)
+  return str.replace(/-(\w)/g, toUpper)
+}
+
+function toUpper (_, c) {
+  return c ? c.toUpperCase() : ''
+}
+
+/**
+ * Hyphenate a camelCase string.
+ *
+ * @param {String} str
+ * @return {String}
+ */
+
+exports.hyphenate = function (str) {
+  return str
+    .replace(/([a-z\d])([A-Z])/g, '$1-$2')
+    .toLowerCase()
 }
 
 /**
@@ -105,8 +127,13 @@ exports.classify = function (str) {
  */
 
 exports.bind = function (fn, ctx) {
-  return function () {
-    return fn.apply(ctx, arguments)
+  return function (a) {
+    var l = arguments.length
+    return l
+      ? l > 1
+        ? fn.apply(ctx, arguments)
+        : fn.call(ctx, a)
+      : fn.call(ctx)
   }
 }
 
@@ -152,7 +179,7 @@ exports.extend = function (to, from) {
  */
 
 exports.isObject = function (obj) {
-  return obj && typeof obj === 'object'
+  return obj !== null && typeof obj === 'object'
 }
 
 /**
@@ -175,9 +202,7 @@ exports.isPlainObject = function (obj) {
  * @return {Boolean}
  */
 
-exports.isArray = function (obj) {
-  return Array.isArray(obj)
-}
+exports.isArray = Array.isArray
 
 /**
  * Define a non-enumerable property
@@ -190,10 +215,10 @@ exports.isArray = function (obj) {
 
 exports.define = function (obj, key, val, enumerable) {
   Object.defineProperty(obj, key, {
-    value        : val,
-    enumerable   : !!enumerable,
-    writable     : true,
-    configurable : true
+    value: val,
+    enumerable: !!enumerable,
+    writable: true,
+    configurable: true
   })
 }
 
@@ -206,9 +231,9 @@ exports.define = function (obj, key, val, enumerable) {
  * @return {Function} - the debounced function
  */
 
-exports.debounce = function(func, wait) {
+exports.debounce = function (func, wait) {
   var timeout, args, context, timestamp, result
-  var later = function() {
+  var later = function () {
     var last = Date.now() - timestamp
     if (last < wait && last >= 0) {
       timeout = setTimeout(later, wait - last)
@@ -218,7 +243,7 @@ exports.debounce = function(func, wait) {
       if (!timeout) context = args = null
     }
   }
-  return function() {
+  return function () {
     context = this
     args = arguments
     timestamp = Date.now()
@@ -227,4 +252,57 @@ exports.debounce = function(func, wait) {
     }
     return result
   }
+}
+
+/**
+ * Manual indexOf because it's slightly faster than
+ * native.
+ *
+ * @param {Array} arr
+ * @param {*} obj
+ */
+
+exports.indexOf = function (arr, obj) {
+  for (var i = 0, l = arr.length; i < l; i++) {
+    if (arr[i] === obj) return i
+  }
+  return -1
+}
+
+/**
+ * Make a cancellable version of an async callback.
+ *
+ * @param {Function} fn
+ * @return {Function}
+ */
+
+exports.cancellable = function (fn) {
+  var cb = function () {
+    if (!cb.cancelled) {
+      return fn.apply(this, arguments)
+    }
+  }
+  cb.cancel = function () {
+    cb.cancelled = true
+  }
+  return cb
+}
+
+/**
+ * Check if two values are loosely equal - that is,
+ * if they are plain objects, do they have the same shape?
+ *
+ * @param {*} a
+ * @param {*} b
+ * @return {Boolean}
+ */
+
+exports.looseEqual = function (a, b) {
+  /* eslint-disable eqeqeq */
+  return a == b || (
+    exports.isObject(a) && exports.isObject(b)
+      ? JSON.stringify(a) === JSON.stringify(b)
+      : false
+  )
+  /* eslint-enable eqeqeq */
 }

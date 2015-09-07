@@ -1,18 +1,14 @@
 var _ = require('../util')
-var mergeOptions = require('../util/merge-option')
+var config = require('../config')
 
 /**
  * Expose useful internals
  */
 
 exports.util = _
+exports.config = config
 exports.nextTick = _.nextTick
-exports.config = require('../config')
-
-exports.compiler = {
-  compile: require('../compiler/compile'),
-  transclude: require('../compiler/transclude')
-}
+exports.compiler = require('../compiler')
 
 exports.parsers = {
   path: require('../parsers/path'),
@@ -32,7 +28,7 @@ exports.cid = 0
 var cid = 1
 
 /**
- * Class inehritance
+ * Class inheritance
  *
  * @param {Object} extendOptions
  */
@@ -48,7 +44,7 @@ exports.extend = function (extendOptions) {
   Sub.prototype = Object.create(Super.prototype)
   Sub.prototype.constructor = Sub
   Sub.cid = cid++
-  Sub.options = mergeOptions(
+  Sub.options = _.mergeOptions(
     Super.options,
     extendOptions
   )
@@ -57,7 +53,9 @@ exports.extend = function (extendOptions) {
   Sub.extend = Super.extend
   // create asset registers, so extended classes
   // can have their private assets too.
-  createAssetRegisters(Sub)
+  config._assetTypes.forEach(function (type) {
+    Sub[type] = Super[type]
+  })
   return Sub
 }
 
@@ -96,55 +94,26 @@ exports.use = function (plugin) {
 }
 
 /**
- * Define asset registration methods on a constructor.
+ * Create asset registration methods with the following
+ * signature:
  *
- * @param {Function} Constructor
+ * @param {String} id
+ * @param {*} definition
  */
 
-var assetTypes = [
-  'directive',
-  'filter',
-  'partial',
-  'transition'
-]
-
-function createAssetRegisters (Constructor) {
-
-  /* Asset registration methods share the same signature:
-   *
-   * @param {String} id
-   * @param {*} definition
-   */
-
-  assetTypes.forEach(function (type) {
-    Constructor[type] = function (id, definition) {
-      if (!definition) {
-        return this.options[type + 's'][id]
-      } else {
-        this.options[type + 's'][id] = definition
-      }
-    }
-  })
-
-  /**
-   * Component registration needs to automatically invoke
-   * Vue.extend on object values.
-   *
-   * @param {String} id
-   * @param {Object|Function} definition
-   */
-
-  Constructor.component = function (id, definition) {
+config._assetTypes.forEach(function (type) {
+  exports[type] = function (id, definition) {
     if (!definition) {
-      return this.options.components[id]
+      return this.options[type + 's'][id]
     } else {
-      if (_.isPlainObject(definition)) {
+      if (
+        type === 'component' &&
+        _.isPlainObject(definition)
+      ) {
         definition.name = id
         definition = _.Vue.extend(definition)
       }
-      this.options.components[id] = definition
+      this.options[type + 's'][id] = definition
     }
   }
-}
-
-createAssetRegisters(exports)
+})

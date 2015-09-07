@@ -29,7 +29,7 @@ describe('Data API', function () {
     expect(vm.$get('c')).toBeUndefined()
     // invalid, should warn
     vm.$get('a(')
-    expect(_.warn).toHaveBeenCalled()
+    expect(hasWarned(_, 'Invalid expression')).toBe(true)
   })
 
   it('$set', function () {
@@ -40,13 +40,18 @@ describe('Data API', function () {
     // setting unexisting
     vm.$set('c.d', 2)
     expect(vm.c.d).toBe(2)
+    // warn against setting unexisting
+    expect(hasWarned(_, 'Consider pre-initializing')).toBe(true)
+  })
+
+  it('$set invalid', function () {
     // invalid, should throw
     if (leftHandThrows()) {
       // if creating a function with invalid left hand
-      // expression throws, the exp parser will catch the 
+      // expression throws, the exp parser will catch the
       // error and warn.
       vm.$set('c + d', 1)
-      expect(_.warn).toHaveBeenCalled()
+      expect(hasWarned(_, 'Invalid setter function body')).toBe(true)
     } else {
       // otherwise it will throw when calling the setter.
       expect(function () {
@@ -84,28 +89,39 @@ describe('Data API', function () {
   it('$watch', function (done) {
     var spy = jasmine.createSpy()
     // test immediate invoke
-    var unwatch = vm.$watch('a + b.c', spy, false, true)
-    expect(spy).toHaveBeenCalledWith(3, undefined)
+    var unwatch = vm.$watch('a + b.c', spy, {
+      immediate: true
+    })
+    expect(spy).toHaveBeenCalledWith(3)
     vm.a = 2
     nextTick(function () {
       expect(spy).toHaveBeenCalledWith(4, 3)
-      // reuse same watcher
-      var spy2 = jasmine.createSpy()
-      var unwatch2 = vm.$watch('a + b.c', spy2)
-      expect(vm._watcherList.length).toBe(1)
-      vm.b = { c: 3 }
+      // unwatch
+      unwatch()
+      vm.a = 3
       nextTick(function () {
-        expect(spy).toHaveBeenCalledWith(5, 4)
-        expect(spy2).toHaveBeenCalledWith(5, 4)
-        // unwatch
-        unwatch()
-        unwatch2()
-        vm.a = 3
-        nextTick(function () {
-          expect(spy.calls.count()).toBe(3)
-          expect(spy2.calls.count()).toBe(1)
-          done()
-        })
+        expect(spy.calls.count()).toBe(2)
+        done()
+      })
+    })
+  })
+
+  it('function $watch', function (done) {
+    var spy = jasmine.createSpy()
+    // test immediate invoke
+    var unwatch = vm.$watch(function () {
+      return this.a + this.b.c
+    }, spy, { immediate: true })
+    expect(spy).toHaveBeenCalledWith(3)
+    vm.a = 2
+    nextTick(function () {
+      expect(spy).toHaveBeenCalledWith(4, 3)
+      // unwatch
+      unwatch()
+      vm.a = 3
+      nextTick(function () {
+        expect(spy.calls.count()).toBe(2)
+        done()
       })
     })
   })
@@ -113,7 +129,9 @@ describe('Data API', function () {
   it('deep $watch', function (done) {
     var oldB = vm.b
     var spy = jasmine.createSpy()
-    vm.$watch('b', spy, true)
+    vm.$watch('b', spy, {
+      deep: true
+    })
     vm.b.c = 3
     nextTick(function () {
       expect(spy).toHaveBeenCalledWith(oldB, oldB)
@@ -166,7 +184,7 @@ describe('Data API', function () {
 
 function leftHandThrows () {
   try {
-    var fn = new Function('a + b = 1')
+    new Function('a + b = 1')
   } catch (e) {
     return true
   }

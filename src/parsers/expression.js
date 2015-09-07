@@ -24,7 +24,7 @@ var wsRE = /\s/g
 var newlineRE = /\n/g
 var saveRE = /[\{,]\s*[\w\$_]+\s*:|('[^']*'|"[^"]*")|new |typeof |void /g
 var restoreRE = /"(\d+)"/g
-var pathTestRE = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*|\['.*?'\]|\[".*?"\]|\[\d+\])*$/
+var pathTestRE = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*|\['.*?'\]|\[".*?"\]|\[\d+\]|\[[A-Za-z_$][\w$]*\])*$/
 var pathReplaceRE = /[^\w$\.]([A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*|\['.*?'\]|\[".*?"\])*)/g
 var booleanLiteralRE = /^(true|false)$/
 
@@ -106,9 +106,8 @@ function restore (str, i) {
 
 function compileExpFns (exp, needSet) {
   if (improperKeywordsRE.test(exp)) {
-    _.warn(
-      'Avoid using reserved keywords in expression: '
-      + exp
+    process.env.NODE_ENV !== 'production' && _.warn(
+      'Avoid using reserved keywords in expression: ' + exp
     )
   }
   // reset state
@@ -146,6 +145,7 @@ function compilePathFns (exp) {
   if (exp.indexOf('[') < 0) {
     // really simple path
     path = exp.split('.')
+    path.raw = exp
     getter = Path.compileGetter(path)
   } else {
     // do the real parsing
@@ -175,7 +175,7 @@ function makeGetter (body) {
   try {
     return new Function('scope', 'return ' + body + ';')
   } catch (e) {
-    _.warn(
+    process.env.NODE_ENV !== 'production' && _.warn(
       'Invalid expression. ' +
       'Generated function body: ' + body
     )
@@ -200,7 +200,9 @@ function makeSetter (body) {
   try {
     return new Function('scope', 'value', body + '=value;')
   } catch (e) {
-    _.warn('Invalid setter function body: ' + body)
+    process.env.NODE_ENV !== 'production' && _.warn(
+      'Invalid setter function body: ' + body
+    )
   }
 }
 
@@ -239,17 +241,24 @@ exports.parse = function (exp, needSet) {
   // but that's too rare and we don't care.
   // also skip boolean literals and paths that start with
   // global "Math"
-  var res =
-    pathTestRE.test(exp) &&
-    // don't treat true/false as paths
-    !booleanLiteralRE.test(exp) &&
-    // Math constants e.g. Math.PI, Math.E etc.
-    exp.slice(0, 5) !== 'Math.'
-      ? compilePathFns(exp)
-      : compileExpFns(exp, needSet)
+  var res = exports.isSimplePath(exp)
+    ? compilePathFns(exp)
+    : compileExpFns(exp, needSet)
   expressionCache.put(exp, res)
   return res
 }
 
-// Export the pathRegex for external use
-exports.pathTestRE = pathTestRE
+/**
+ * Check if an expression is a simple path.
+ *
+ * @param {String} exp
+ * @return {Boolean}
+ */
+
+exports.isSimplePath = function (exp) {
+  return pathTestRE.test(exp) &&
+    // don't treat true/false as paths
+    !booleanLiteralRE.test(exp) &&
+    // Math constants e.g. Math.PI, Math.E etc.
+    exp.slice(0, 5) !== 'Math.'
+}

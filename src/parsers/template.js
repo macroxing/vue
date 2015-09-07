@@ -4,10 +4,10 @@ var templateCache = new Cache(1000)
 var idSelectorCache = new Cache(1000)
 
 var map = {
-  _default : [0, '', ''],
-  legend   : [1, '<fieldset>', '</fieldset>'],
-  tr       : [2, '<table><tbody>', '</tbody></table>'],
-  col      : [
+  _default: [0, '', ''],
+  legend: [1, '<fieldset>', '</fieldset>'],
+  tr: [2, '<table><tbody>', '</tbody></table>'],
+  col: [
     2,
     '<table><tbody></tbody><colgroup>',
     '</colgroup></table>'
@@ -56,6 +56,19 @@ map.rect = [
   '</svg>'
 ]
 
+/**
+ * Check if a node is a supported template node with a
+ * DocumentFragment content.
+ *
+ * @param {Node} node
+ * @return {Boolean}
+ */
+
+function isRealTemplate (node) {
+  return _.isTemplate(node) &&
+    node.content instanceof DocumentFragment
+}
+
 var tagRE = /<([\w:]+)/
 var entityRE = /&\w+;/
 
@@ -86,12 +99,12 @@ function stringToFragment (templateString) {
     )
   } else {
 
-    var tag    = tagMatch && tagMatch[1]
-    var wrap   = map[tag] || map._default
-    var depth  = wrap[0]
+    var tag = tagMatch && tagMatch[1]
+    var wrap = map[tag] || map._default
+    var depth = wrap[0]
     var prefix = wrap[1]
     var suffix = wrap[2]
-    var node   = document.createElement('div')
+    var node = document.createElement('div')
 
     node.innerHTML = prefix + templateString.trim() + suffix
     while (depth--) {
@@ -99,8 +112,9 @@ function stringToFragment (templateString) {
     }
 
     var child
-    /* jshint boss:true */
+    /* eslint-disable no-cond-assign */
     while (child = node.firstChild) {
+    /* eslint-enable no-cond-assign */
       frag.appendChild(child)
     }
   }
@@ -117,27 +131,26 @@ function stringToFragment (templateString) {
  */
 
 function nodeToFragment (node) {
-  var tag = node.tagName
   // if its a template tag and the browser supports it,
   // its content is already a document fragment.
-  if (
-    tag === 'TEMPLATE' &&
-    node.content instanceof DocumentFragment
-  ) {
+  if (isRealTemplate(node)) {
+    _.trimNode(node.content)
     return node.content
   }
   // script template
-  if (tag === 'SCRIPT') {
+  if (node.tagName === 'SCRIPT') {
     return stringToFragment(node.textContent)
   }
   // normal node, clone it to avoid mutating the original
   var clone = exports.clone(node)
   var frag = document.createDocumentFragment()
   var child
-  /* jshint boss:true */
+  /* eslint-disable no-cond-assign */
   while (child = clone.firstChild) {
+  /* eslint-enable no-cond-assign */
     frag.appendChild(child)
   }
+  _.trimNode(frag)
   return frag
 }
 
@@ -171,17 +184,25 @@ var hasTextareaCloneBug = _.inBrowser
  */
 
 exports.clone = function (node) {
+  if (!node.querySelectorAll) {
+    return node.cloneNode()
+  }
   var res = node.cloneNode(true)
   var i, original, cloned
   /* istanbul ignore if */
   if (hasBrokenTemplate) {
+    var clone = res
+    if (isRealTemplate(node)) {
+      node = node.content
+      clone = res.content
+    }
     original = node.querySelectorAll('template')
     if (original.length) {
-      cloned = res.querySelectorAll('template')
+      cloned = clone.querySelectorAll('template')
       i = cloned.length
       while (i--) {
         cloned[i].parentNode.replaceChild(
-          original[i].cloneNode(true),
+          exports.clone(original[i]),
           cloned[i]
         )
       }
@@ -227,8 +248,9 @@ exports.parse = function (template, clone, noSelector) {
   // if the template is already a document fragment,
   // do nothing
   if (template instanceof DocumentFragment) {
+    _.trimNode(template)
     return clone
-      ? template.cloneNode(true)
+      ? exports.clone(template)
       : template
   }
 

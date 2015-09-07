@@ -1,4 +1,25 @@
+var _ = require('./index')
 var config = require('../config')
+
+/**
+ * Query an element selector if it's not an element already.
+ *
+ * @param {String|Element} el
+ * @return {Element}
+ */
+
+exports.query = function (el) {
+  if (typeof el === 'string') {
+    var selector = el
+    el = document.querySelector(el)
+    if (!el) {
+      process.env.NODE_ENV !== 'production' && _.warn(
+        'Cannot find element: ' + selector
+      )
+    }
+  }
+  return el
+}
 
 /**
  * Check if a node is in the document.
@@ -12,11 +33,8 @@ var config = require('../config')
  * @return {Boolean}
  */
 
-var doc =
-  typeof document !== 'undefined' &&
-  document.documentElement
-
 exports.inDoc = function (node) {
+  var doc = document.documentElement
   var parent = node && node.parentNode
   return doc === node ||
     doc === parent ||
@@ -105,23 +123,6 @@ exports.replace = function (target, el) {
 }
 
 /**
- * Copy attributes from one element to another.
- *
- * @param {Element} from
- * @param {Element} to
- */
-
-exports.copyAttributes = function (from, to) {
-  if (from.hasAttributes()) {
-    var attrs = from.attributes
-    for (var i = 0, l = attrs.length; i < l; i++) {
-      var attr = attrs[i]
-      to.setAttribute(attr.name, attr.value)
-    }
-  }
-}
-
-/**
  * Add event listener shorthand.
  *
  * @param {Element} el
@@ -195,14 +196,77 @@ exports.removeClass = function (el, cls) {
 exports.extractContent = function (el, asFragment) {
   var child
   var rawContent
+  /* istanbul ignore if */
+  if (
+    exports.isTemplate(el) &&
+    el.content instanceof DocumentFragment
+  ) {
+    el = el.content
+  }
   if (el.hasChildNodes()) {
+    exports.trimNode(el)
     rawContent = asFragment
       ? document.createDocumentFragment()
       : document.createElement('div')
-    /* jshint boss:true */
+    /* eslint-disable no-cond-assign */
     while (child = el.firstChild) {
+    /* eslint-enable no-cond-assign */
       rawContent.appendChild(child)
     }
   }
   return rawContent
+}
+
+/**
+ * Trim possible empty head/tail textNodes inside a parent.
+ *
+ * @param {Node} node
+ */
+
+exports.trimNode = function (node) {
+  trim(node, node.firstChild)
+  trim(node, node.lastChild)
+}
+
+function trim (parent, node) {
+  if (node && node.nodeType === 3 && !node.data.trim()) {
+    parent.removeChild(node)
+  }
+}
+
+/**
+ * Check if an element is a template tag.
+ * Note if the template appears inside an SVG its tagName
+ * will be in lowercase.
+ *
+ * @param {Element} el
+ */
+
+exports.isTemplate = function (el) {
+  return el.tagName &&
+    el.tagName.toLowerCase() === 'template'
+}
+
+/**
+ * Create an "anchor" for performing dom insertion/removals.
+ * This is used in a number of scenarios:
+ * - fragment instance
+ * - v-html
+ * - v-if
+ * - component
+ * - repeat
+ *
+ * @param {String} content
+ * @param {Boolean} persist - IE trashes empty textNodes on
+ *                            cloneNode(true), so in certain
+ *                            cases the anchor needs to be
+ *                            non-empty to be persisted in
+ *                            templates.
+ * @return {Comment|Text}
+ */
+
+exports.createAnchor = function (content, persist) {
+  return config.debug
+    ? document.createComment(content)
+    : document.createTextNode(persist ? ' ' : '')
 }

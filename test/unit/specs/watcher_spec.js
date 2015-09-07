@@ -17,13 +17,14 @@ describe('Watcher', function () {
           c: 2,
           d: 4
         },
-        c: 'c'
+        c: 'c',
+        msg: 'yo'
       }
     })
     spy = jasmine.createSpy('watcher')
     spyOn(_, 'warn')
   })
-  
+
   it('simple path', function (done) {
     var watcher = new Watcher(vm, 'b.c', spy)
     expect(watcher.value).toBe(2)
@@ -203,7 +204,7 @@ describe('Watcher', function () {
     expect(watcher.value).toBe(oldData)
     var newData = {}
     vm.$data = newData
-    nextTick(function() {
+    nextTick(function () {
       expect(spy).toHaveBeenCalledWith(newData, oldData)
       expect(watcher.value).toBe(newData)
       done()
@@ -235,12 +236,11 @@ describe('Watcher', function () {
     vm.$options.filters.test2 = function (val, str) {
       return val + str
     }
-    var filters = _.resolveFilters(vm, [
-      { name: 'test', args: [3] },
-      { name: 'test2', args: ['yo']}
-    ])
     var watcher = new Watcher(vm, 'b.c', spy, {
-      filters: filters
+      filters: [
+        { name: 'test', args: [{value: 3, dynamic: false}]},
+        { name: 'test2', args: [{value: 'msg', dynamic: true}]}
+      ]
     })
     expect(watcher.value).toBe('6yo')
     vm.b.c = 3
@@ -257,11 +257,10 @@ describe('Watcher', function () {
         return val > arg ? val : oldVal
       }
     }
-    var filters = _.resolveFilters(vm, [
-      { name: 'test', args: [5] }
-    ])
     var watcher = new Watcher(vm, 'b["c"]', spy, {
-      filters: filters,
+      filters: [
+        { name: 'test', args: [{value: 5, dynamic: false}] }
+      ],
       twoWay: true
     })
     expect(watcher.value).toBe(2)
@@ -293,14 +292,14 @@ describe('Watcher', function () {
   })
 
   it('deep watch', function (done) {
-    var watcher = new Watcher(vm, 'b', spy, {
+    new Watcher(vm, 'b', spy, {
       deep: true
     })
     vm.b.c = { d: 4 }
     nextTick(function () {
       expect(spy).toHaveBeenCalledWith(vm.b, vm.b)
       var oldB = vm.b
-      vm.b = { c: [{a:1}] }
+      vm.b = { c: [{a: 1}]}
       nextTick(function () {
         expect(spy).toHaveBeenCalledWith(vm.b, oldB)
         expect(spy.calls.count()).toBe(2)
@@ -314,35 +313,39 @@ describe('Watcher', function () {
     })
   })
 
-  it('add callback', function (done) {
-    var watcher = new Watcher(vm, 'a', spy)
-    var spy2 = jasmine.createSpy()
-    watcher.addCb(spy2)
-    vm.a = 99
+  it('watch function', function (done) {
+    var watcher = new Watcher(vm, function () {
+      return this.a + this.b.d
+    }, spy)
+    expect(watcher.value).toBe(5)
+    vm.a = 2
     nextTick(function () {
-      expect(spy).toHaveBeenCalledWith(99, 1)
-      expect(spy2).toHaveBeenCalledWith(99, 1)
-      done()
+      expect(spy).toHaveBeenCalledWith(6, 5)
+      vm.b = { d: 2 }
+      nextTick(function () {
+        expect(spy).toHaveBeenCalledWith(4, 6)
+        done()
+      })
     })
   })
 
-  it('remove callback', function (done) {
-    // single, should equal teardown
-    var fn = function () {}
-    var watcher = new Watcher(vm, 'a', fn)
-    watcher.removeCb(fn)
-    expect(watcher.active).toBe(false)
-    expect(watcher.vm).toBe(null)
-    expect(watcher.cbs).toBe(null)
-    // multiple
-    watcher = new Watcher(vm, 'a', spy)
-    var spy2 = jasmine.createSpy()
-    watcher.addCb(spy2)
-    watcher.removeCb(spy)
-    vm.a = 234
+  it('lazy mode', function (done) {
+    var watcher = new Watcher(vm, function () {
+      return this.a + this.b.d
+    }, null, { lazy: true })
+    expect(watcher.lazy).toBe(true)
+    expect(watcher.value).toBeUndefined()
+    expect(watcher.dirty).toBe(true)
+    watcher.evaluate()
+    expect(watcher.value).toBe(5)
+    expect(watcher.dirty).toBe(false)
+    vm.a = 2
     nextTick(function () {
-      expect(spy).not.toHaveBeenCalled()
-      expect(spy2).toHaveBeenCalledWith(234, 1)
+      expect(watcher.value).toBe(5)
+      expect(watcher.dirty).toBe(true)
+      watcher.evaluate()
+      expect(watcher.value).toBe(6)
+      expect(watcher.dirty).toBe(false)
       done()
     })
   })
@@ -354,7 +357,7 @@ describe('Watcher', function () {
     nextTick(function () {
       expect(watcher.active).toBe(false)
       expect(watcher.vm).toBe(null)
-      expect(watcher.cbs).toBe(null)
+      expect(watcher.cb).toBe(null)
       expect(spy).not.toHaveBeenCalled()
       done()
     })
@@ -362,7 +365,7 @@ describe('Watcher', function () {
 
   it('synchronous updates', function () {
     config.async = false
-    var watcher = new Watcher(vm, 'a', spy)
+    new Watcher(vm, 'a', spy)
     vm.a = 2
     vm.a = 3
     expect(spy.calls.count()).toBe(2)
@@ -371,30 +374,15 @@ describe('Watcher', function () {
     config.async = true
   })
 
-  it('handle a cb that triggers removeCb', function () {
-    var watcher = new Watcher(vm, 'a', spy)
-    watcher.addCb(function () {
-      watcher.removeCb(spy)
-    })
-    watcher.addCb(function () {})
-    config.async = false
-    expect(function () {
-      vm.a = 2
-    }).not.toThrow()
-    config.async = true
-    expect(spy).toHaveBeenCalled()
-    expect(watcher.cbs.length).toBe(2)
-  })
-
   it('warn getter errors', function () {
-    var watcher = new Watcher(vm, 'd.e + c', spy)
-    expect(_.warn).toHaveBeenCalled()
+    new Watcher(vm, 'd.e + c', spy)
+    expect(hasWarned(_, 'Error when evaluating expression')).toBe(true)
   })
 
   it('warn setter errors', function () {
     var watcher = new Watcher(vm, 'a + b', spy)
     watcher.set(123)
-    expect(_.warn).toHaveBeenCalled()
+    expect(hasWarned(_, 'Error when evaluating setter')).toBe(true)
   })
 
 })
